@@ -1,0 +1,96 @@
+import requests
+from xml.etree import ElementTree as ET
+
+
+def search_pubmed(term, max_results=None, apikey='5bf560c10392c5f750548c0cfa094244fc08'):
+    # Base URL for the esearch endpoint
+    base_url = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi'
+
+    # Parameters for the search
+    params = dict(db="pubmed", term=term, retmode="json", email="jada.wallace@nih.gov")
+
+    # Set max_results if provided
+    if max_results:
+        params['retmax'] = max_results
+    else:
+        params['retmax'] = 100000  # Set a large number to attempt fetching more results
+
+    # Include the API key if provided
+    if apikey:
+        params["api_key"] = apikey
+
+    # Send the GET request
+    response = requests.get(base_url, params=params)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        # Parse the JSON response
+        data = response.json()
+        pmid_list = data.get("esearchresult", {}).get("idlist", [])
+        print(f"Found {len(pmid_list)} PMIDs.")
+        return pmid_list
+    else:
+        print(f"Error: {response.status_code}")
+        return []
+
+
+def fetch_abstracts(pmids, apikey='5bf560c10392c5f750548c0cfa094244fc08'):
+    # Base URL for the efetch endpoint
+    base_url = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'
+
+    # Function to fetch abstracts in batches
+    def fetch_batch(batch_pmids):
+        params = {
+            "db": "pubmed",
+            "retmode": "xml",
+            "id": ",".join(batch_pmids)
+        }
+
+        if apikey:
+            params["api_key"] = apikey
+
+        response = requests.get(base_url, params=params)
+
+        if response.status_code == 200:
+            root = ET.fromstring(response.content)
+            batch_abstracts = []
+            for article in root.findall(".//PubmedArticle"):
+                article_pmid = article.findtext(".//PMID")
+                abstract_text = article.findtext(".//Abstract/AbstractText")
+                batch_abstracts.append((article_pmid, abstract_text))
+            return batch_abstracts
+        else:
+            print(f"Error: {response.status_code}")
+            return []
+
+    # Batch the PMIDs to avoid 414 error
+    batch_size = 200  # Number of PMIDs per batch, adjust if needed
+    all_abstracts = []
+
+    for i in range(0, len(pmids), batch_size):
+        batch_pmids = pmids[i:i + batch_size]
+        batch_abstracts = fetch_batch(batch_pmids)
+        print(f"Fetched {len(batch_abstracts)} abstracts for batch {i // batch_size + 1}")
+        all_abstracts.extend(batch_abstracts)
+
+    return all_abstracts
+
+
+# Example usage with API key
+if __name__ == "__main__":
+    query = "Amyotrophic Lateral Sclerosis"
+    api_key = "5bf560c10392c5f750548c0cfa094244fc08"  # Replace with your actual API key
+
+    # Search PubMed for PMIDs
+    pmid_list = search_pubmed(query, apikey=api_key)
+
+    # Fetch abstracts for the retrieved PMIDs
+    if pmid_list:
+        results = fetch_abstracts(pmid_list, apikey=api_key)
+
+        # Print the results with numbers
+        for i, (pmid, abstract) in enumerate(results, start=1):
+            print(f"{i}. PMID: {pmid}")
+            print(f"Abstract: {abstract}\n")
+    else:
+        print("No PMIDs found.")
