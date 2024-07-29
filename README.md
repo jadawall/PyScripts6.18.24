@@ -2,7 +2,7 @@
 
 **Author:** Jada Wallace
 
-**Mentor:** Memoona Rasheed, PhD
+**Mentor:** Dr. Memoona Rasheed, PhD
 
 **Principal Investigator:** Dr. Bryan Traynor, MD, PhD
 
